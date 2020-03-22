@@ -81,6 +81,7 @@
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 
+
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
 
 #define DEVICE_NAME                     "Nordic_UART"                               /**< Name of device. Will be included in the advertising data. */
@@ -117,7 +118,40 @@ static ble_uuid_t m_adv_uuids[]          =                                      
 };
 
 APP_TIMER_DEF(m_led_timer_id);
-#define LED_BLINK_INTERVAL         APP_TIMER_TICKS(20)  
+#define LED_BLINK_INTERVAL         APP_TIMER_TICKS(500)  
+
+const  unsigned char g_revision_date[12] = __DATE__;
+const  unsigned char g_revision_time[16] = __TIME__;
+static char firm_ware[32];
+
+const struct
+{
+	uint32_t	MAC_ADDRESS[2];
+	char		PIN[6];
+	uint32_t	RESET_CODE;
+} RELAY_DATA  __attribute((section("uicr_customer_mac")))  = {
+	.MAC_ADDRESS = { 0x11223344, 0x55667788},
+	.PIN         = { 'v','1', '.', '0', '1', '2' },
+	.RESET_CODE  = 0x12345678,
+};
+
+#if defined (__CC_ARM)
+	 const uint32_t UICR_ADDR_0x84 __attribute__((at(0x10001084))) __attribute__((used)) = 0x00010000;
+#elif defined (__GNUC__) || defined (__SES_ARM)
+	volatile uint32_t user_data  __attribute__ ((section(".uicr_customer"))) = 0x11111111;	
+#endif
+
+static void uict_write_test(void)
+{
+   // static uint8_t step=0;
+      NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Wen;
+      while (NRF_NVMC->READY == NVMC_READY_READY_Busy){}
+      for(uint8_t i=0;i<2;i++)NRF_UICR->CUSTOMER[i] =RELAY_DATA.MAC_ADDRESS[i];
+      for(uint8_t i=0;i<6;i++)NRF_UICR->CUSTOMER[i+2] =RELAY_DATA.PIN[i];
+      NRF_UICR->CUSTOMER[8] =RELAY_DATA.RESET_CODE;
+      while (NRF_NVMC->READY == NVMC_READY_READY_Busy){}
+}
+
 
 /**@brief Function for assert macro callback.
  *
@@ -135,24 +169,67 @@ void assert_nrf_callback(uint16_t line_num, const uint8_t * p_file_name)
     app_error_handler(DEAD_BEEF, line_num, p_file_name);
 }
 
-static uint16_t x=0; 
-static uint32_t c = 0x0000FF;
+//static uint16_t x=0; 
+//static uint32_t c = 0x0000FF;
+
+static void led_mode1(void)
+{
+  static uint16_t x=0; 
+  static uint32_t c = 0x0000FF;
+  drv_ws2812_pixel_draw(x++, 0, c);
+  drv_ws2812_display();
+  if(x==30)
+  {
+     x=0;
+     c = c<<8;
+     if(c > 0xFF0000)c = 0x0000FF;
+   }
+}
+
+static void led_mode2(void)
+{ 
+  drv_ws2812_rectangle_draw(0, 0, 15, 15, 0xFFFF00);
+  drv_ws2812_display();
+}
+
+static void led_mode3(void)
+{ 
+  drv_ws2812_rectangle_draw(15, 0, 30, 30, 0xFF00FF);
+  drv_ws2812_display();
+}
+
+static void led_mode4(void)
+{ 
+  drv_ws2812_rectangle_draw(0, 0, 30, 30, 0x000000);
+  drv_ws2812_display();
+}
 
 static void led_blinking_handler(void * p_context)
 {
+    static uint32_t step= 0;
+    static uint32_t step1= 0;
     UNUSED_PARAMETER(p_context);
-
- //   c += 255;
-    drv_ws2812_pixel_draw(x++, 0, c);
-    drv_ws2812_display();
-    if(x==30)
+    if(step == 0)
     {
-      x=0;
-      c = c<<8;
-      if(c > 0xFF0000)c = 0x0000FF;
+      led_mode4();
+      step = 1;
     }
-    NRF_LOG_INFO("stat blink.");
-   // drv_ws2812_line_draw(1, 0, 0xFF);   
+    else if(step == 1)
+    {
+      led_mode2();
+      step = 2;
+    }
+    else if( step == 2)
+    {
+      led_mode3();
+      step = 3;
+    }
+    else if(step == 3)
+    {
+       drv_ws2812_rectangle_draw(0, 0, 30, 30, 0xFFFFFF);
+       drv_ws2812_display();
+       step = 0;
+    }
 }
 
 /**@brief Function for initializing the timer module.
@@ -507,8 +584,11 @@ void gatt_init(void)
 void bsp_event_handler(bsp_event_t event)
 {
     uint32_t err_code;
+    static uint8_t key_dex=0;
+    static bool is_time_start = false;
     switch (event)
     {
+    /*
         case BSP_EVENT_SLEEP:
             sleep_mode_enter();
             break;
@@ -531,7 +611,79 @@ void bsp_event_handler(bsp_event_t event)
                 }
             }
             break;
-
+*/
+        case BSP_EVENT_KEY_3:
+            if(key_dex==0)
+            {
+              if(is_time_start == true)
+              {
+                err_code = app_timer_stop(m_led_timer_id);
+                APP_ERROR_CHECK(err_code);
+              }
+              drv_ws2812_rectangle_draw(0, 0, 30, 30, 0x000000);
+              drv_ws2812_display();
+              key_dex=1;
+              NRF_LOG_INFO("LED darck ");
+            }
+            else if(key_dex==1) //R
+            {
+              drv_ws2812_rectangle_draw(0, 0, 30, 30, 0xFF0000);
+              drv_ws2812_display();
+              key_dex=2;
+              NRF_LOG_INFO("LED Red ");
+            }
+            else if(key_dex==2) //G
+            {
+              drv_ws2812_rectangle_draw(0, 0, 30, 30, 0x00FF00);
+              drv_ws2812_display();
+              key_dex=3;
+              NRF_LOG_INFO("LED green ");
+            }
+            else if(key_dex==3) //B
+            {
+              drv_ws2812_rectangle_draw(0, 0, 30, 30, 0x0000FF);
+              drv_ws2812_display();
+              key_dex=4;
+              NRF_LOG_INFO("LED blue ");
+            }
+            else if(key_dex==4) //W
+            {
+              drv_ws2812_rectangle_draw(0, 0, 30, 30, 0xFFFFFF);
+              drv_ws2812_display();
+              key_dex=5;
+              NRF_LOG_INFO("LED white ");
+            }
+            else if(key_dex==5) //RG
+            {
+              drv_ws2812_rectangle_draw(0, 0, 30, 30, 0xFFFF00);
+              drv_ws2812_display();
+              key_dex=6;
+              NRF_LOG_INFO("LED RG ");
+            }
+           else if(key_dex==6) //GB
+            {
+              drv_ws2812_rectangle_draw(0, 0, 30, 30, 0x00FFFF);
+              drv_ws2812_display();
+              key_dex=7;
+              NRF_LOG_INFO("LED GB ");
+            }
+            else if(key_dex==7) //RB
+            {
+              drv_ws2812_rectangle_draw(0, 0, 30, 30, 0xFF00FF);
+              drv_ws2812_display();
+              key_dex=8;
+              NRF_LOG_INFO("LED RB ");
+            } 
+            else if(key_dex == 8)
+            {
+               drv_ws2812_rectangle_draw(0, 0, 30, 30, 0x000000);
+               drv_ws2812_display();
+               err_code = app_timer_start(m_led_timer_id, LED_BLINK_INTERVAL, NULL);
+               APP_ERROR_CHECK(err_code);
+               is_time_start = true;
+               key_dex = 0;
+            }
+            break;
         default:
             break;
     }
@@ -728,6 +880,9 @@ static void advertising_start(void)
 int main(void)
 {
     bool erase_bonds;
+    sprintf(firm_ware, "v1.1 %s %s\r\n",  g_revision_date, g_revision_time);
+    //UICR
+    uict_write_test();
 
     // Initialize.
     uart_init();
@@ -745,12 +900,13 @@ int main(void)
     // Start execution.
    // printf("\r\nUART started.\r\n");
     NRF_LOG_INFO("Debug logging for UART over RTT started.");
+    NRF_LOG_INFO("%s",firm_ware);
     advertising_start();
 
-    drv_ws2812_init();
+    drv_ws2812_init();   
     // Start application timers.
-    uint32_t err_code = app_timer_start(m_led_timer_id, LED_BLINK_INTERVAL, NULL);
-    APP_ERROR_CHECK(err_code);
+  //  uint32_t err_code = app_timer_start(m_led_timer_id, LED_BLINK_INTERVAL, NULL);
+  //  APP_ERROR_CHECK(err_code);
     // Enter main loop.
     for (;;)
     {

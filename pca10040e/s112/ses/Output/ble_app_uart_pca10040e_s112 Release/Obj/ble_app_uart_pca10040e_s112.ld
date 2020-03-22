@@ -3,6 +3,7 @@ MEMORY
   UNPLACED_SECTIONS (wx) : ORIGIN = 0x100000000, LENGTH = 0
   RAM (wx) : ORIGIN = 0x20000000, LENGTH = 0x00006000
   FLASH (wx) : ORIGIN = 0x00000000, LENGTH = 0x00030000
+  UICR (wx) : ORIGIN = 0x10001080, LENGTH = 0x40
 }
 
 SECTIONS
@@ -616,6 +617,13 @@ SECTIONS
   __RAM_segment_used_size__ = __RAM_segment_used_end__ - __RAM_segment_start__;
 
   . = ASSERT(__stack_process_start__ == __stack_process_end__ || (__stack_process_end__ - __RAM_segment_start__) <= __RAM_segment_size__ , "error: .stack_process is too large to fit in RAM memory segment");
-
+  .uicr_customer : 
+  {
+    KEEP(*(.uicr_customer))
+  } > UICR
+  .uicr_customer_mac : 
+  {
+    KEEP(*(.uicr_customer_mac))
+  } > UICR
 }
 

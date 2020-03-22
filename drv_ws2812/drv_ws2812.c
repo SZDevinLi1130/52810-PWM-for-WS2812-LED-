@@ -143,16 +143,3 @@ uint32_t drv_ws2812_rectangle_draw(uint16_t x, uint16_t y, uint16_t width, uint1
     }
     return NRF_SUCCESS;
 }
-
-//
-uint32_t drv_ws2812_line_draw(uint16_t start, uint16_t step,uint32_t color)
-{  
-    uint32_t err_code;
-    
-    err_code = drv_ws2812_pixel_draw(start, step, color);
-   // if(err_code) return err_code;   
-    drv_ws2812_display();
-   // color += 0xFF;
-    start++;
-    return NRF_SUCCESS;
-}
