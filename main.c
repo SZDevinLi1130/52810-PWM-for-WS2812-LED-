@@ -117,8 +117,23 @@ static ble_uuid_t m_adv_uuids[]          =                                      
     {BLE_UUID_NUS_SERVICE, NUS_SERVICE_UUID_TYPE}
 };
 
+
+const uint16_t index_wave[] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 
+                               4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 9, 9, 9, 10, 10, 10, 11, 11, 12, 12, 
+                               13, 13, 14, 14, 15, 15, 16, 16, 17, 18, 18, 19, 20, 20, 21, 22, 23, 24, 25, 25, 26, 27, 28, 30, 31, 32, 33, 
+                               34, 36, 37, 38, 40, 41, 43, 45, 46, 48, 50, 52, 54, 56, 58, 60, 62, 65, 67, 70, 72, 75, 78, 81, 84, 87, 90, 
+                               94, 97, 101, 105, 109, 113, 117, 122, 126, 131, 136, 141, 146, 152, 158, 164, 170, 176, 183, 190, 197, 205, 
+                               213, 221, 229, 238, 247, 256, 256, 247, 238, 229, 221, 213, 205, 197, 190, 183, 176, 170, 164, 158, 152, 146, 
+                               141, 136, 131, 126, 122, 117, 113, 109, 105, 101, 97, 94, 90, 87, 84, 81, 78, 75, 72, 70, 67, 65, 62, 60, 58, 
+                               56, 54, 52, 50, 48, 46, 45, 43, 41, 40, 38, 37, 36, 34, 33, 32, 31, 30, 28, 27, 26, 25, 25, 24, 23, 22, 21, 20, 
+                               20, 19, 18, 18, 17, 16, 16, 15, 15, 14, 14, 13, 13, 12, 12, 11, 11, 10, 10, 10, 9, 9, 9, 8, 8, 8, 7, 7, 7, 7, 6, 
+                               6, 6, 6, 6, 5, 5, 5, 5, 5, 4, 4, 4, 4, 4, 4, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 
+                               2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+
 APP_TIMER_DEF(m_led_timer_id);
-#define LED_BLINK_INTERVAL         APP_TIMER_TICKS(500)  
+APP_TIMER_DEF(m_led_bre_timer_id);
+#define LED_BLINK_INTERVAL         APP_TIMER_TICKS(500)
+#define LED_BREATH_INTERVAL        APP_TIMER_TICKS(20)    //breathing
 
 const  unsigned char g_revision_date[12] = __DATE__;
 const  unsigned char g_revision_time[16] = __TIME__;
@@ -204,6 +219,23 @@ static void led_mode4(void)
   drv_ws2812_display();
 }
 
+static void led_breathing_handler(void * p_context)
+{
+   //static uint32_t col=0;
+   static uint32_t led_bri=0;
+   static float k=1;
+   UNUSED_PARAMETER(p_context);
+   led_bri = changeL(0x0000ff,k++); 
+   drv_ws2812_rectangle_draw(0, 0, 30, 30, led_bri);
+   drv_ws2812_display();
+   if (k >= 256)  k=1;
+ //  k += 0.1;
+  // col++;
+  // if(col>= 0xFFFFFF)col = 0;
+
+   
+}
+
 static void led_blinking_handler(void * p_context)
 {
     static uint32_t step= 0;
@@ -243,6 +275,11 @@ static void timers_init(void)
     err_code = app_timer_create(&m_led_timer_id,
                                 APP_TIMER_MODE_REPEATED,
                                 led_blinking_handler);
+    APP_ERROR_CHECK(err_code);
+
+     err_code = app_timer_create(&m_led_bre_timer_id,
+                                APP_TIMER_MODE_REPEATED,
+                                led_breathing_handler);
     APP_ERROR_CHECK(err_code);
 }
 
@@ -586,6 +623,8 @@ void bsp_event_handler(bsp_event_t event)
     uint32_t err_code;
     static uint8_t key_dex=0;
     static bool is_time_start = false;
+    static uint8_t key2_dex = 0;
+    static bool is_time2_start = false;
     switch (event)
     {
     /*
@@ -612,7 +651,34 @@ void bsp_event_handler(bsp_event_t event)
             }
             break;
 */
+        case BSP_EVENT_KEY_2:
+             if(is_time_start == true)
+              {
+                  err_code = app_timer_stop(m_led_timer_id);
+                  APP_ERROR_CHECK(err_code);
+              }
+              if(key2_dex ==0)
+              {
+                drv_ws2812_rectangle_draw(0, 0, 30, 30, 0);
+                drv_ws2812_display();
+               
+                err_code = app_timer_start(m_led_bre_timer_id, LED_BREATH_INTERVAL, NULL);
+                APP_ERROR_CHECK(err_code);
+                key2_dex = 1;
+                is_time2_start = true;
+              }
+              else if(key2_dex == 1)
+              {
+                err_code = app_timer_stop(m_led_bre_timer_id);
+                APP_ERROR_CHECK(err_code);
+              }
+              break;
         case BSP_EVENT_KEY_3:
+            if(is_time2_start == true)
+            {
+              err_code = app_timer_stop(m_led_bre_timer_id);
+              APP_ERROR_CHECK(err_code); 
+            }
             if(key_dex==0)
             {
               if(is_time_start == true)
@@ -662,14 +728,14 @@ void bsp_event_handler(bsp_event_t event)
             }
            else if(key_dex==6) //GB
             {
-              drv_ws2812_rectangle_draw(0, 0, 30, 30, 0x00FFFF);
+              drv_ws2812_rectangle_draw(0, 0, 30, 30, 0x48C1C1);
               drv_ws2812_display();
               key_dex=7;
               NRF_LOG_INFO("LED GB ");
             }
             else if(key_dex==7) //RB
             {
-              drv_ws2812_rectangle_draw(0, 0, 30, 30, 0xFF00FF);
+              drv_ws2812_rectangle_draw(0, 0, 30, 30, 0xF00533);
               drv_ws2812_display();
               key_dex=8;
               NRF_LOG_INFO("LED RB ");

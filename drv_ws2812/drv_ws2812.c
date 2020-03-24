@@ -143,3 +143,207 @@ uint32_t drv_ws2812_rectangle_draw(uint16_t x, uint16_t y, uint16_t width, uint1
     }
     return NRF_SUCCESS;
 }
+
+
+static float min(float a, float b, float c)
+{
+  float m;
+  
+  m = a < b ? a : b;
+  return (m < c ? m : c); 
+}
+
+static float max(float a, float b, float c)
+{
+  float m;
+  
+  m = a > b ? a : b;
+  return (m > c ? m : c); 
+}
+  
+void rgb2hsv(uint8_t r, uint8_t g, uint8_t b, float *h, float *s, float *v)
+{
+  float red, green ,blue;
+  float cmax, cmin, delta;
+  
+  red = (float)r / 255;
+  green = (float)g / 255;
+  blue = (float)b / 255;
+  
+  cmax = max(red, green, blue);
+  cmin = min(red, green, blue);
+  delta = cmax - cmin;
+
+  /* H */
+  if(delta == 0)
+  {
+    *h = 0;
+  }
+  else
+  {
+    if(cmax == red)
+    {
+      if(green >= blue)
+      {
+        *h = 60 * ((green - blue) / delta);
+      }
+      else
+      {
+        *h = 60 * ((green - blue) / delta) + 360;
+      }
+    }
+    else if(cmax == green)
+    {
+      *h = 60 * ((blue - red) / delta + 2);
+    }
+    else if(cmax == blue) 
+    {
+      *h = 60 * ((red - green) / delta + 4);
+    }
+  }
+  
+  /* S */
+  if(cmax == 0)
+  {
+    *s = 0;
+  }
+  else
+  {
+    *s = delta / cmax;
+  }
+  
+  /* V */
+  *v = cmax;
+}
+  
+void hsv2rgb(float h, float s, float v, uint8_t *r, uint8_t *g, uint8_t *b)
+{
+    int hi = ((int)h / 60) % 6;
+    float f = h * 1.0 / 60 - hi;
+    float p = v * (1 - s);
+    float q = v * (1 - f * s);
+    float t = v * (1- (1 - f) * s);
+    switch (hi){
+        case 0:
+            *r = 255 * v;
+            *g = 255 * t;
+            *b = 255 * p;
+            break;
+        case 1:
+            *r = 255 * q;
+            *g = 255 * v;
+            *b = 255 * p;
+            break;
+        case 2:
+            *r = 255 * p;
+            *g = 255 * v;
+            *b = 255 * t;
+            break;
+        case 3:
+            *r = 255 * p;
+            *g = 255 * q;
+            *b = 255 * v;
+            break;
+        case 4:
+            *r = 255 * t;
+            *g = 255 * p;
+            *b = 255 * v;
+            break;
+        case 5:
+            *r = 255 * v;
+            *g = 255 * p;
+            *b = 255 * q;
+            break;
+    }
+}
+
+
+uint32_t changeL(uint32_t rgb, float k) 
+{
+	uint8_t r, g, b;
+	float h, s, v;
+	uint8_t cmax, cmin, cdes;
+ 
+	r = (uint8_t) (rgb >> 16);
+	g = (uint8_t) (rgb >> 8);
+	b = (uint8_t) (rgb);
+ 
+	//os_printf("1:  0x%x \r\n", rgb);
+	//os_printf("1:  %d %d %d \r\n", r, g, b);
+ 
+	cmax = r > g ? r : g;
+	if (b > cmax)
+		cmax = b;
+	cmin = r < g ? r : g;
+	if (b < cmin)
+		cmin = b;
+	cdes = cmax - cmin;
+ 
+	v = cmax / 255.0f;
+	s = cmax == 0 ? 0 : cdes / (float) cmax;
+	h = 0;
+ 
+	if (cmax == r && g >= b)
+		h = ((g - b) * 60.0f / cdes) + 0;
+	else if (cmax == r && g < b)
+		h = ((g - b) * 60.0f / cdes) + 360;
+	else if (cmax == g)
+		h = ((b - r) * 60.0f / cdes) + 120;
+	else
+		h = ((r - g) * 60.0f / cdes) + 240;
+ 
+	//////
+ 
+	v *= k;
+ 
+	float f, p, q, t;
+	float rf, gf, bf;
+	int i = ((int) (h / 60) % 6);
+	f = (h / 60) - i;
+	p = v * (1 - s);
+	q = v * (1 - f * s);
+	t = v * (1 - (1 - f) * s);
+	switch (i) {
+	case 0:
+		rf = v;
+		gf = t;
+		bf = p;
+		break;
+	case 1:
+		rf = q;
+		gf = v;
+		bf = p;
+		break;
+	case 2:
+		rf = p;
+		gf = v;
+		bf = t;
+		break;
+	case 3:
+		rf = p;
+		gf = q;
+		bf = v;
+		break;
+	case 4:
+		rf = t;
+		gf = p;
+		bf = v;
+		break;
+	case 5:
+		rf = v;
+		gf = p;
+		bf = q;
+		break;
+	default:
+		break;
+	}
+ 
+	r = (uint8_t) (rf * 255.0);
+	g = (uint8_t) (gf * 255.0);
+	b = (uint8_t) (bf * 255.0);
+ 
+	uint32_t returnColor = ((uint32_t) r << 16) | ((uint32_t) g << 8) | b;
+	//os_printf("2:  %d %d %d \r\n", (int) r, (int) g, (int) b);
+	//os_printf("2:  0x%x \r\n\r\n", returnColor);
+	return returnColor;
+}

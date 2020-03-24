@@ -54,6 +54,8 @@ uint32_t drv_ws2812_rectangle_draw(uint16_t x, uint16_t y, uint16_t width, uint1
 
 uint32_t drv_ws2812_line_draw(uint16_t start, uint16_t step,uint32_t color);
 
+uint32_t changeL(uint32_t rgb, float k);
+
 
 #endif // DRV_WS2812_H__
 
